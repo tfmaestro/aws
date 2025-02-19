@@ -17,18 +17,6 @@ data "aws_subnet" "public_subnet" {
   vpc_id = data.aws_vpc.vpc.id
 }
 
-data "aws_subnet" "private_subnet" {
-  for_each = toset([
-    "prod-private-subnet-01",
-    "prod-private-subnet-02"
-  ])
-  filter {
-    name   = "tag:Name"
-    values = [each.key]
-  }
-  vpc_id = data.aws_vpc.vpc.id
-}
-
 resource "aws_iam_role" "eks_role" {
   for_each = toset([for i in range(var.cluster_count) : "${var.cluster_name}-0${i + 1}"])
 
@@ -91,10 +79,7 @@ resource "aws_eks_cluster" "primary" {
   role_arn = each.value.arn
   
   vpc_config {
-    subnet_ids = concat(
-      [for subnet in data.aws_subnet.public_subnet : subnet.id],
-      [for subnet in data.aws_subnet.private_subnet : subnet.id]
-    )
+    subnet_ids = [for subnet in data.aws_subnet.public_subnet : subnet.id]
     endpoint_public_access  = true
     endpoint_private_access = true
     public_access_cidrs     = var.trusted_ip_range
@@ -108,10 +93,7 @@ resource "aws_eks_node_group" "primary_node_group" {
 
   cluster_name    = each.value.name
   node_role_arn   = aws_iam_role.nodes.arn
-    subnet_ids = concat(
-      [for subnet in data.aws_subnet.public_subnet : subnet.id],
-      [for subnet in data.aws_subnet.private_subnet : subnet.id]
-    )
+  subnet_ids      = [for subnet in data.aws_subnet.public_subnet : subnet.id]
   node_group_name = "${each.value.name}-node"
 
   scaling_config {
